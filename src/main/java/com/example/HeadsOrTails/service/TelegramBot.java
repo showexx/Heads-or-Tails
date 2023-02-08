@@ -1,33 +1,36 @@
 package com.example.HeadsOrTails.service;
 
 import com.example.HeadsOrTails.config.BotConfig;
+
+import com.example.HeadsOrTails.models.Users;
+import com.example.HeadsOrTails.repositories.UserRepository;
 import org.apache.commons.lang3.StringUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
-import java.io.BufferedWriter;
-import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.security.SecureRandom;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+
 
 @Component
 public class TelegramBot extends TelegramLongPollingBot {
+
+    @Autowired
+    private UserRepository userRepository;
+
     final BotConfig botConfig;
-    final String WELCOME_MESSAGE = "Вас приветствует помощник для игры в монетку!";
-    final String path = "c://var//temp.txt";
+    final String WELCOME_MESSAGE = "Вас приветствует помощник для игры в монетку! Для продолжения введите сумму";
+    final Path PATH = Paths.get("c://var//temp.txt");
+
+    TempFile tempFile = new TempFile();
 
     public TelegramBot(BotConfig botConfig) {
         this.botConfig = botConfig;
@@ -51,19 +54,26 @@ public class TelegramBot extends TelegramLongPollingBot {
             long chatId = update.getMessage().getChatId();
             switch (messageText) {
                 case "/start":
-                    sendKeyboard(chatId, WELCOME_MESSAGE, keyboard.getCreateKeyboard());
+                    sendMessage(chatId, WELCOME_MESSAGE);
                     break;
                 case "Победа!":
-                    saveResult("Победа");
+                    tempFile.saveResult("Победа");
+                    save(chatId);
+                    deleteFile();
+                    sendMessage(chatId, "Сохранено!");
                     break;
                 case "Поражение!":
-                    saveResult("Поражение");
+                    tempFile.saveResult("Поражение");
+                    save(chatId);
+                    deleteFile();
+                    sendMessage(chatId, "Сохранено!");
                     break;
                 default:
                     if (StringUtils.isNumeric(messageText)) {
                         try {
-                            saveDate();
-                            saveText(messageText);
+                            tempFile.saveDate();
+                            tempFile.saveText(messageText);
+                            sendKeyboard(chatId, "Для продолжения выберите результат.", keyboard.getCreateKeyboard());
                         } catch (IOException e) {
                             throw new RuntimeException(e);
                         }
@@ -71,31 +81,32 @@ public class TelegramBot extends TelegramLongPollingBot {
                     break;
             }
         }
-
     }
 
-    private void saveResult(String result) {
+    private void save(long chatId) {
         try {
-            saveText(result);
+            String result = Files.readString(PATH, StandardCharsets.UTF_8);
+            String[] subStr;
+            String delimiter = "/";
+            subStr = result.split(delimiter);
+
+            Users users = new Users();
+            users.setChatId(chatId);
+            users.setDate(subStr[0]);
+            users.setSum(subStr[1]);
+            users.setResult(subStr[2]);
+            userRepository.save(users);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    private void saveDate() throws IOException {
-        Date date = new Date();
-        SimpleDateFormat formatter = new SimpleDateFormat("dd-MM-yyyy HH:mm:ss");
-        FileWriter writer = new FileWriter(path);
-        BufferedWriter bufferWriter = new BufferedWriter(writer);
-        bufferWriter.write(formatter.format(date));
-        bufferWriter.close();
-    }
-
-    private void saveText(String text) throws IOException {
-        FileWriter writerWithAppend = new FileWriter(path, true);
-        BufferedWriter bufferWriter = new BufferedWriter(writerWithAppend);
-        bufferWriter.write("/" + text);
-        bufferWriter.close();
+    private void deleteFile() {
+        try {
+            Files.delete(PATH);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private void sendKeyboard(long chatId, String textToSend, ReplyKeyboardMarkup keyboard) {

@@ -8,14 +8,18 @@ import java.util.List;
 
 public class Keyboard {
     private ReplyKeyboardMarkup createKeyboard() {
-        ReplyKeyboardMarkup keyboardMarkup = new ReplyKeyboardMarkup();
+        ReplyKeyboardMarkup replyKeyboardMarkup = new ReplyKeyboardMarkup();
         List<KeyboardRow> keyboardRows = new ArrayList<>();
         KeyboardRow row = new KeyboardRow();
+
+        replyKeyboardMarkup.setResizeKeyboard(true);
+        replyKeyboardMarkup.setOneTimeKeyboard(false);
+
         row.add("Победа!");
         row.add("Поражение!");
         keyboardRows.add(row);
-        keyboardMarkup.setKeyboard(keyboardRows);
-        return keyboardMarkup;
+        replyKeyboardMarkup.setKeyboard(keyboardRows);
+        return replyKeyboardMarkup;
     }
 
     public ReplyKeyboardMarkup getCreateKeyboard(){
