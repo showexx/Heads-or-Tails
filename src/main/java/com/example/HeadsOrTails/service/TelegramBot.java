@@ -9,8 +9,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.Update;
-import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.io.IOException;
@@ -56,18 +57,6 @@ public class TelegramBot extends TelegramLongPollingBot {
                 case "/start":
                     sendMessage(chatId, WELCOME_MESSAGE);
                     break;
-                case "Победа!":
-                    tempFile.saveResult("Победа");
-                    save(chatId);
-                    deleteFile();
-                    sendMessage(chatId, "Сохранено!");
-                    break;
-                case "Поражение!":
-                    tempFile.saveResult("Поражение");
-                    save(chatId);
-                    deleteFile();
-                    sendMessage(chatId, "Сохранено!");
-                    break;
                 default:
                     if (StringUtils.isNumeric(messageText)) {
                         try {
@@ -80,6 +69,53 @@ public class TelegramBot extends TelegramLongPollingBot {
                     }
                     break;
             }
+        } else if (update.hasCallbackQuery()) {
+            checkCallback(update);
+        }
+    }
+
+    private void checkCallback(Update update) {
+        String callbackData = update.getCallbackQuery().getData();
+        long messageId = update.getCallbackQuery().getMessage().getMessageId();
+        long chatId = update.getCallbackQuery().getMessage().getChatId();
+        if (lengthString() >= 21) {
+            if (callbackData.equals("Победа!")) {
+                tempFile.saveResult("Победа");
+                save(chatId);
+                editMessage((int) messageId, chatId, "Победа!");
+            } else if (callbackData.equals("Поражение!")) {
+                tempFile.saveResult("Поражение");
+                save(chatId);
+                editMessage((int) messageId, chatId, "Поражение!");
+            }
+        }else{
+            sendMessage(chatId, "Укажите сначала сумму!");
+        }
+    }
+
+    private int lengthString() {
+        String content = null;
+        try {
+            content = Files.lines(PATH).reduce("", String::concat);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return content.length();
+    }
+
+    private void editMessage(int messageId, long chatId, String text) {
+        EditMessageText message = new EditMessageText();
+        message.setChatId(String.valueOf(chatId));
+        message.setText(text);
+        message.setMessageId(messageId);
+        executeEditMessage(message);
+    }
+
+    private void executeEditMessage(EditMessageText message) {
+        try {
+            execute(message);
+        } catch (TelegramApiException e) {
+            System.out.println("Error");
         }
     }
 
@@ -96,20 +132,13 @@ public class TelegramBot extends TelegramLongPollingBot {
             users.setSum(subStr[1]);
             users.setResult(subStr[2]);
             userRepository.save(users);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    private void deleteFile() {
-        try {
             Files.delete(PATH);
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
     }
 
-    private void sendKeyboard(long chatId, String textToSend, ReplyKeyboardMarkup keyboard) {
+    private void sendKeyboard(long chatId, String textToSend, InlineKeyboardMarkup keyboard) {
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
         message.setText(textToSend);
